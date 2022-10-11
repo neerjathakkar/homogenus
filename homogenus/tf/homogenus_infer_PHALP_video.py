@@ -18,7 +18,7 @@
 # Code Developed by: Nima Ghorbani <https://www.linkedin.com/in/nghorbani/>
 # 2018.11.07
  
-# python3 -m homogenus.tf.homogenus_infer_PHALP -ii PHALP_data/img -oi PHALP_data/bboxes/ -io PHALP_data/img_gendered
+# python3 -m homogenus.tf.homogenus_infer_PHALP_video 
 
 import tensorflow as tf
 import numpy as np
@@ -163,6 +163,9 @@ class Homogenus_infer(object):
         summed_probs = []
         counts = []
 
+        logfile_name = f"{images_outdir}/results.txt"
+        f = open(logfile_name, "w")
+
         for j, im_fname in enumerate(im_fnames):
             im_basename = os.path.basename(im_fname)
             img_ext = im_basename.split('.')[-1]
@@ -196,10 +199,12 @@ class Homogenus_infer(object):
                     iou = get_iou(bbox1, bbox2)
                     # print("IOU:")
                     # print(iou)
-                    if iou > 0:
+                    if iou > 0.33:
                         execute_frame = False
                 
                 if execute_frame:
+                    f.writelines(f"\nimg: {im_basename}\n")
+                    f.writelines(f"iou: {round(iou, 3)}\n")
                     for i, bbox in enumerate(bboxes):
                         # print(i, bbox)
                         
@@ -250,11 +255,14 @@ class Homogenus_infer(object):
                         # print("summed_probs")
                         # print(summed_probs)
                         # print(counts)
+                        
+                        f.writelines(f"idx: {i}, prob male:{round(probs_ob[0], 3)}, prob female:{round(probs_ob[1], 3)}\n")
 
                     if images_outdir != None:
                         # print("writing image")
                         save_images(im_orig, images_outdir, [os.path.basename(im_fname)])
-            
+
+        f.writelines("\naverage probabilities: \n") 
         for p in range(len(summed_probs)):
             print(f"person at index {p}:")
             
@@ -263,48 +271,47 @@ class Homogenus_infer(object):
             
             print(counts)
             print(f"avg prob female: {prob_female}, avg prob male: {prob_male}")
-
+            f.writelines(f"idx: {p}, avg prob female: {prob_female}, avg prob male: {prob_male}\n")
                 
                 
         if images_outdir is not None:
             sys.stdout.write('Dumped overlayed images at %s'%images_outdir)
 
-
+        f.close()
 
 if __name__ == '__main__':
     print("processing PHALP data")
     import argparse
+    import random 
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-tm", "--trained_model_dir", default="./homogenus/trained_models/tf/", help="The path to the directory holding homogenus trained models in TF.")
-    # parser.add_argument("-n", "--mp4_name", required= True, help="Directory of the input images.")
-    # parser.add_argument("-oi", "--bboxes_indir", required=True, help="Directory of bounding boxes, e.g. json files.")
-    # parser.add_argument("-io", "--images_outdir", default=None, help="Directory to put predicted gender overlays. If not given, wont produce any overlays.")
-    # # parser.add_argument("-oo", "--openpose_outdir", default=None, help="Directory to put the openpose gendered keypoints. If not given, it will augment the original openpose json files.")
-
     ps = parser.parse_args()
     
-    mp4s = ["00LQjxAgHHA", "JC8ATckUGAo", "trSum93Z_6I", "_13iG-MvGtg", "6W8VGnEHf-I", "6xfLkqXWC8o", "bwFbVCxIpRo", "k8175B7vQZ4", "laLyyC_RXa4"]
-    for mp4_name in mp4s:
+    files = glob.glob("/home/neerja/swing_dancing/out/phalp_dance_data/results/*.pkl")
+    mp4_names = [os.path.basename(f)[9:-4] for f in files]
+    random.shuffle(mp4_names)
+    mp4_names = mp4_names[:100]
+
+    # mp4s = ["00LQjxAgHHA", "JC8ATckUGAo", "trSum93Z_6I", "_13iG-MvGtg", "6W8VGnEHf-I", "6xfLkqXWC8o", "bwFbVCxIpRo", "k8175B7vQZ4", "laLyyC_RXa4"]
+    for mp4_name in mp4_names:
         print(mp4_name)
         pkl = f"/home/neerja/swing_dancing/out/phalp_dance_data/results/mp4_file_{mp4_name}.pkl"
         # print(pkl)
         phalp_data = joblib.load(pkl)
-        # frame = "000001"
-        # bbox = phalp_data[f'{frame}.jpg']['tracked_bbox']
-        # bbox_list = [x.tolist() for x in bbox]
 
         images_indir = f"/home/neerja/swing_dancing/dance_data/{mp4_name}/img/"
-        images_outdir = f"PHALP_data/{mp4_name}_img_gendered"
+        # images_outdir = f"PHALP_data/{mp4_name}_img_gendered"
+        images_outdir = f"/home/neerja/swing_dancing/homogenus_out/{mp4_name}_img_gendered"
 
         # print(bbox_list)
 
         hg = Homogenus_infer(trained_model_dir=ps.trained_model_dir)
 
-        print("\nallowing bbox overlap:")
-        hg.predict_genders(images_indir=images_indir, phalp_data=phalp_data, start_frame=1, end_frame=1000,
-                        images_outdir=images_outdir, allow_bbox_overlap=True)
+        # print("\nallowing bbox overlap:")
+        # hg.predict_genders(images_indir=images_indir, phalp_data=phalp_data, start_frame=1, end_frame=1000,
+        #                 images_outdir=images_outdir, allow_bbox_overlap=True)
         print("\nnot allowing bbox overlap:")
-        hg.predict_genders(images_indir=images_indir, phalp_data=phalp_data, start_frame=1, end_frame=1000,
+        hg.predict_genders(images_indir=images_indir, phalp_data=phalp_data, start_frame=1, end_frame=100000,
                         images_outdir=images_outdir, allow_bbox_overlap=False)
 
